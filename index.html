@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>粒子感三维茉莉花束</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#03060a}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+#stage{position:fixed;inset:0}
+#tip{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+padding:8px 14px;border:1px solid rgba(255,255,255,.12);border-radius:999px;
+background:rgba(4,8,14,.55);backdrop-filter:blur(10px);color:rgba(235,246,255,.72);
+font-size:12px;letter-spacing:.08em;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="tip">三维粒子茉莉花束 · 自动旋转 · 可拖动查看</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+  const root=document.getElementById('stage');
+  const scene=new THREE.Scene();
+  scene.fog=new THREE.FogExp2(0x03060a,0.055);
+
+  const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,100);
+  camera.position.set(0,0.9,11);
+
+  const renderer=new THREE.WebGLRenderer({
+    antialias:true,alpha:false,powerPreference:'high-performance'
+  });
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.15;
+  root.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xbfd8e8,1.15));
+
+  const key=new THREE.DirectionalLight(0xffffff,2.6);
+  key.position.set(4,7,7);
+  scene.add(key);
+
+  const rim=new THREE.PointLight(0x8fdcff,12,22,2);
+  rim.position.set(-5,2,4);
+  scene.add(rim);
+
+  const warm=new THREE.PointLight(0xd7b7ff,7,18,2);
+  warm.position.set(4,-2,-2);
+  scene.add(warm);
+
+  const bouquet=new THREE.Group();
+  scene.add(bouquet);
+
+  function petalGeometry(len=1.15,w=0.56,bend=.24,twist=0){
+    const seg=7, across=4, pos=[],norm=[],uv=[],idx=[];
+
+    for(let i=0;i<=seg;i++){
+      const t=i/seg;
+      const y=t*len;
+      const width=Math.sin(Math.PI*Math.pow(t,.8))*w*(.88+.12*Math.cos(t*Math.PI));
+      const lift=bend*t*t;
+
+      for(let j=0;j<=across;j++){
+        const u=j/across;
+        const x=(u-.5)*2*width;
+        const crown=0.10*Math.sin(Math.PI*t)*Math.cos((u-.5)*Math.PI);
+        const a=twist*t + .08*Math.sin(t*Math.PI);
+        const ca=Math.cos(a),sa=Math.sin(a);
+
+        pos.push(x*ca-crown*sa,y+lift,x*sa+crown*ca);
+        norm.push(-Math.sin(a)*.3,.25,Math.cos(a)*.3);
+        uv.push(u,t);
+      }
+    }
+
+    for(let i=0;i<seg;i++)for(let j=0;j<across;j++){
+      const a=i*(across+1)+j,b=a+1,c=a+(across+1),d=c+1;
+      idx.push(a,c,b,b,c,d);
+    }
+
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    g.setAttribute('normal',new THREE.Float32BufferAttribute(norm,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+
+  function makeFlower(scale=1){
+    const flower=new THREE.Group();
+
+    const mat=new THREE.MeshPhysicalMaterial({
+      color:0xf7fbff,
+      roughness:.25,
+      metalness:.05,
+      clearcoat:.8,
+      clearcoatRoughness:.18,
+      side:THREE.DoubleSide,
+      emissive:0x18202a,
+      emissiveIntensity:.08
+    });
+
+    for(let i=0;i<6;i++){
+      const m=new THREE.Mesh(
+        petalGeometry(1.18,.55,.23,(i%2?-1:1)*.08),
+        mat
+      );
+      m.scale.set(scale,scale,scale);
+      m.rotation.z=i*Math.PI/3;
+      m.rotation.x=-0.28+0.08*Math.sin(i);
+      flower.add(m);
+    }
+
+    const center=new THREE.Mesh(
+      new THREE.SphereGeometry(.25*scale,24,16),
+      new THREE.MeshPhysicalMaterial({
+        color:0xf2d98a,
+        roughness:.3,
+        metalness:.15,
+        emissive:0x5a4210,
+        emissiveIntensity:.15
+      })
+    );
+    center.position.y=.12*scale;
+    flower.add(center);
+
+    const halo=new THREE.Mesh(
+      new THREE.SphereGeometry(.43*scale,24,16),
+      new THREE.MeshBasicMaterial({
+        color:0xcfeeff,
+        transparent:true,
+        opacity:.055,
+        blending:THREE.AdditiveBlending,
+        depthWrite:false
+      })
+    );
+    halo.position.y=.12*scale;
+    flower.add(halo);
+
+    return flower;
+  }
+
+  const flowers=[];
+  const specs=[
+    [0,1.15,0,1.18],
+    [-1.65,.45,.25,.88],
+    [1.55,.5,.2,.9],
+    [-1.15,-.95,-.2,.82],
+    [1.15,-1.0,-.15,.84],
+    [0,-.55,-.65,.9],
+    [0,1.95,-.55,.7]
+  ];
+
+  specs.forEach((s,i)=>{
+    const f=makeFlower(s[3]);
+    f.position.set(s[0],s[1],s[2]);
+    f.rotation.set(.12*Math.sin(i),.25*i,.2*Math.cos(i));
+    bouquet.add(f);
+    flowers.push(f);
+  });
+
+  const stemMat=new THREE.MeshStandardMaterial({
+    color:0x203b35,roughness:.72,metalness:.05
+  });
+
+  specs.forEach(s=>{
+    const curve=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0,-2.6,0),
+      new THREE.Vector3(s[0]*.45,-1.3,s[2]*.35),
+      new THREE.Vector3(s[0],s[1]-.25,s[2])
+    ]);
+    const stem=new THREE.Mesh(
+      new THREE.TubeGeometry(curve,24,.035,8,false),
+      stemMat
+    );
+    bouquet.add(stem);
+  });
+
+  // 粒子花粉 / 科技离子感
+  const count=900;
+  const arr=new Float32Array(count*3);
+  const sizes=new Float32Array(count);
+
+  for(let i=0;i<count;i++){
+    const r=Math.pow(Math.random(),.65)*3.6;
+    const a=Math.random()*Math.PI*2;
+
+    arr[i*3]=Math.cos(a)*r*(.55+.45*Math.random());
+    arr[i*3+1]=(Math.random()-.45)*4.8;
+    arr[i*3+2]=Math.sin(a)*r*.75;
+    sizes[i]=.018+Math.random()*.045;
+  }
+
+  const pg=new THREE.BufferGeometry();
+  pg.setAttribute('position',new THREE.BufferAttribute(arr,3));
+  pg.setAttribute('size',new THREE.BufferAttribute(sizes,1));
+
+  const pm=new THREE.PointsMaterial({
+    color:0xb9e9ff,
+    size:.035,
+    transparent:true,
+    opacity:.72,
+    blending:THREE.AdditiveBlending,
+    depthWrite:false,
+    sizeAttenuation:true
+  });
+
+  const particles=new THREE.Points(pg,pm);
+  bouquet.add(particles);
+
+  const controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;
+  controls.dampingFactor=.035;
+  controls.enablePan=false;
+  controls.minDistance=6;
+  controls.maxDistance=15;
+  controls.autoRotate=true;
+  controls.autoRotateSpeed=.55;
+
+  let t=0;
+
+  function animate(){
+    requestAnimationFrame(animate);
+    t+=.008;
+
+    // 整束缓慢自动旋转
+    bouquet.rotation.y+=.0022;
+    bouquet.rotation.z=Math.sin(t*.55)*.018;
+    particles.rotation.y-=.0025;
+
+    // 花朵有非常轻微的空间呼吸感
+    flowers.forEach((f,i)=>{
+      f.position.y+=Math.sin(t*1.25+i*.8)*.00055;
+    });
+
+    controls.update();
+    renderer.render(scene,camera);
+  }
+
+  animate();
+
+  addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+  });
+})();
+</script>
+</body>
+</html>

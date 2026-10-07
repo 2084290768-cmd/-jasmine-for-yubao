@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>给宇宝的茉莉花</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden}
+body{background:radial-gradient(circle at 50% 30%,#fffdfb,#f8f0eb 55%,#eaded7);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#62504a}
+canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:manipulation}
+.text{position:fixed;z-index:2;top:8%;left:0;width:100%;text-align:center;pointer-events:none}
+h1{margin:0;font-size:clamp(29px,8vw,52px);font-weight:500;letter-spacing:.12em}
+p{margin:14px 0 0;font-size:clamp(15px,4vw,21px);letter-spacing:.16em;opacity:.7}
+.card{position:fixed;z-index:3;bottom:6%;left:50%;transform:translateX(-50%);width:min(88%,420px);padding:15px 18px;border-radius:20px;background:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.8);backdrop-filter:blur(9px);text-align:center;box-shadow:0 12px 35px rgba(90,65,50,.08);pointer-events:none}
+.main{font-size:clamp(17px,4.4vw,23px);letter-spacing:.12em}
+.sub{margin-top:7px;font-size:12px;letter-spacing:.1em;opacity:.55}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="text">
+<h1>给宇宝的茉莉花</h1>
+<p>送君茉莉，愿君莫离</p>
+</div>
+<div class="card">
+<div class="main">愿这一束茉莉，替我陪在你身边。</div>
+<div class="sub">轻触花束 · 收下我的心意 ♡</div>
+</div>
+<script>
+(function(){
+"use strict";
+const canvas=document.getElementById("c"),ctx=canvas.getContext("2d");
+let W=0,H=0,D=1,t=0,flowers=[],leaves=[],petals=[],sparkles=[];
+const rand=(a,b)=>a+Math.random()*(b-a);
+function resize(){
+ D=Math.min(window.devicePixelRatio||1,2);
+ W=Math.max(1,window.innerWidth);H=Math.max(1,window.innerHeight);
+ canvas.width=Math.floor(W*D);canvas.height=Math.floor(H*D);
+ ctx.setTransform(D,0,0,D,0,0);
+ makeBouquet();
+}
+function makeBouquet(){
+ flowers=[];leaves=[];sparkles=[];
+ const cx=W/2,sc=Math.min(W/430,H/820);
+ const n=Math.max(8,Math.min(14,Math.round(W/42)));
+ for(let i=0;i<n;i++)flowers.push({
+  x:cx+rand(-W*.22,W*.22),y:H*.36+rand(-H*.12,H*.14),
+  r:rand(12,20)*sc,s:rand(.78,1.08)*sc,phase:rand(0,6.283)
+ });
+ for(let i=0;i<19;i++)leaves.push({
+  x:cx+rand(-W*.27,W*.27),y:H*.52+rand(-H*.02,H*.25),
+  s:rand(.6,1.08)*sc,rot:rand(-.9,.9),phase:rand(0,6.283)
+ });
+ for(let i=0;i<28;i++)sparkles.push({x:rand(0,W),y:rand(0,H),r:rand(.4,1.5),phase:rand(0,6.283)});
+}
+function drawLeaf(o){
+ ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.rot+.035*Math.sin(t*.0015+o.phase));ctx.scale(o.s,o.s);
+ ctx.beginPath();ctx.moveTo(0,0);ctx.bezierCurveTo(20,-21,42,-18,49,0);ctx.bezierCurveTo(37,17,14,20,0,0);
+ ctx.fillStyle="#718d68";ctx.fill();
+ ctx.strokeStyle="rgba(50,78,47,.35)";ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(2,0);ctx.quadraticCurveTo(25,0,45,0);ctx.stroke();ctx.restore();
+}
+function drawFlower(f){
+ const x=f.x+Math.sin(t*.00125+f.phase)*3.2*f.s;
+ const y=f.y+Math.cos(t*.001+f.phase)*1.2;
+ const r=f.r;
+ ctx.save();ctx.translate(x,y);
+ for(let i=0;i<5;i++){
+  ctx.save();ctx.rotate(i*1.256637);
+  ctx.beginPath();ctx.moveTo(0,0);
+  ctx.bezierCurveTo(r*.35,-r*.95,r*1.16,-r*.8,r*1.06,-r*.14);
+  ctx.bezierCurveTo(r*.96,r*.55,r*.28,r*.65,0,0);
+  const g=ctx.createLinearGradient(0,-r,0,r);g.addColorStop(0,"#fff");g.addColorStop(1,"#f1ece7");
+  ctx.fillStyle=g;ctx.fill();ctx.restore();
+ }
+ ctx.beginPath();ctx.arc(0,0,r*.21,0,6.283);ctx.fillStyle="#e3c173";ctx.fill();
+ ctx.restore();
+}
+function drawStems(){
+ const cx=W/2,base=H*.88;ctx.lineCap="round";
+ flowers.forEach((f,i)=>{
+  const x=f.x+Math.sin(t*.00125+f.phase)*3.2*f.s;
+  ctx.beginPath();ctx.moveTo(cx+rand(-2,2),base);
+  ctx.quadraticCurveTo(cx+rand(-W*.16,W*.16),H*.67,x,f.y+f.r*.4);
+  ctx.strokeStyle=i%3===0?"#557850":"#63885d";ctx.lineWidth=2.6;ctx.stroke();
+ });
+}
+function drawWrap(){
+ const cx=W/2,y=H*.77,w=Math.min(W*.43,205),h=H*.18;
+ ctx.save();ctx.translate(cx,y);
+ ctx.beginPath();ctx.moveTo(-w*.56,0);ctx.lineTo(w*.56,0);ctx.lineTo(w*.42,h);ctx.lineTo(-w*.42,h);ctx.closePath();
+ const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,"#f7f0e8");g.addColorStop(1,"#ddcec0");
+ ctx.fillStyle=g;ctx.fill();ctx.strokeStyle="rgba(100,80,65,.15)";ctx.stroke();ctx.restore();
+}
+function burst(){
+ for(let i=0;i<45;i++)petals.push({
+  x:W/2+rand(-W*.22,W*.22),y:H*.43+rand(-H*.13,H*.16),
+  vx:rand(-.9,.9),vy:rand(-1.7,-.35),rot:rand(0,6.283),vr:rand(-.05,.05),
+  life:rand(90,165),max:0,s:rand(.55,1.05)
+ });
+ petals.forEach(p=>{if(!p.max)p.max=p.life});
+}
+function drawPetals(){
+ petals=petals.filter(p=>p.life>0);
+ petals.forEach(p=>{
+  p.x+=p.vx+Math.sin(t*.002+p.rot)*.3;p.y+=p.vy;p.vy+=.012;p.rot+=p.vr;p.life--;
+  ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.globalAlpha=.65*p.life/p.max;
+  ctx.beginPath();ctx.ellipse(0,0,4.5,8,0,0,6.283);ctx.fillStyle="#fffefa";ctx.fill();ctx.restore();
+ });
+}
+function frame(){
+ t++;ctx.clearRect(0,0,W,H);
+ sparkles.forEach(s=>{ctx.globalAlpha=.08+.16*(.5+.5*Math.sin(t*.002+s.phase));ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,6.283);ctx.fill()});
+ ctx.globalAlpha=1;
+ drawStems();leaves.forEach(drawLeaf);flowers.slice().sort((a,b)=>a.y-b.y).forEach(drawFlower);drawWrap();drawPetals();
+ requestAnimationFrame(frame);
+}
+let last=0;
+canvas.addEventListener("pointerup",function(e){
+ const now=Date.now();if(now-last<180)return;last=now;
+ const dx=e.clientX-W/2,dy=e.clientY-H*.52;
+ if(Math.hypot(dx,dy)<Math.min(W*.4,210))burst();
+});
+window.addEventListener("resize",resize,{passive:true});
+resize();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

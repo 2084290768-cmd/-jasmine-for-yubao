@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>给宇宝的茉莉花</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050812;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.hint{position:fixed;left:0;right:0;bottom:22px;text-align:center;pointer-events:none;color:rgba(230,245,255,.72);font-size:12px;letter-spacing:2px;text-shadow:0 0 12px #79c9ff}
+.title{position:fixed;top:7vh;left:0;right:0;text-align:center;pointer-events:none}
+.title h1{margin:0;font-size:clamp(24px,6vw,46px);font-weight:500;letter-spacing:.18em;text-shadow:0 0 18px rgba(190,235,255,.55)}
+.title p{margin:10px 0 0;font-size:clamp(12px,3vw,16px);letter-spacing:.32em;color:rgba(224,241,255,.72)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="title"><h1>给宇宝的茉莉花</h1><p>送君茉莉，愿君莫离</p></div>
+<div class="hint">拖动旋转 · 自动旋转中</div>
+<script>
+(()=>{
+const c=document.getElementById('c'),ctx=c.getContext('2d',{alpha:false});
+let W=innerWidth,H=innerHeight,DPR=Math.min(devicePixelRatio||1,2);
+function resize(){W=innerWidth;H=innerHeight;DPR=Math.min(devicePixelRatio||1,2);c.width=W*DPR;c.height=H*DPR;c.style.width=W+'px';c.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)} addEventListener('resize',resize);resize();
+
+const TAU=Math.PI*2, flowers=[], particles=[], stars=[];
+function rnd(a,b){return a+Math.random()*(b-a)}
+// bouquet flowers: hand-built 3D positions
+for(let i=0;i<30;i++){
+  const a=rnd(0,TAU), r=rnd(0,2.7), y=rnd(-1.6,2.9);
+  const scale=rnd(.55,.95)*(1-.10*Math.max(0,y));
+  flowers.push({x:Math.cos(a)*r,y:y,z:Math.sin(a)*r*.75-1.0, s:scale, rot:rnd(0,TAU), tilt:rnd(-.35,.35), phase:rnd(0,TAU)});
+}
+// a few foreground blossoms
+[[0,2.5,2.0,1.08],[-1.2,1.7,1.4,.95],[1.2,1.6,1.2,.9],[-.7,.6,2.0,.82],[.75,.55,1.9,.85],[0,3.3,.3,.75]].forEach(v=>flowers.push({x:v[0],y:v[1],z:v[2],s:v[3],rot:rnd(0,TAU),tilt:0,phase:rnd(0,TAU)}));
+
+for(let i=0;i<900;i++) particles.push({a:rnd(0,TAU),r:rnd(1.7,4.8),y:rnd(-2.8,4.2),sp:rnd(.08,.45),size:rnd(.5,1.8),phase:rnd(0,TAU)});
+for(let i=0;i<100;i++) stars.push({x:rnd(-1,1),y:rnd(-1,1),s:rnd(.3,1.5),p:rnd(0,TAU)});
+
+let yaw=0.35,pitch=-.10,drag=false,lastX=0,lastY=0,vel=0;
+c.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;lastY=e.clientY;c.setPointerCapture(e.pointerId)});
+c.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;yaw+=dx*.008;pitch+=dy*.004;pitch=Math.max(-.65,Math.min(.65,pitch));vel=dx*.0005;lastX=e.clientX;lastY=e.clientY});
+c.addEventListener('pointerup',()=>drag=false); c.addEventListener('pointercancel',()=>drag=false);
+
+function rot(p){
+ let x=p.x,y=p.y,z=p.z;
+ const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+ let X=x*cy-z*sy, Z=x*sy+z*cy;
+ let Y=y*cp-Z*sp; Z=y*sp+Z*cp;
+ return {x:X,y:Y,z:Z};
+}
+function proj(p){
+ const cam=8.5, f=Math.min(W,H)*.44, k=cam/(cam-p.z);
+ return {x:W/2+p.x*f*k,y:H*.56-p.y*f*k,z:p.z,k};
+}
+function ellipsePoint(cx,cy,rx,ry,ang){return [cx+Math.cos(ang)*rx,cy+Math.sin(ang)*ry]}
+
+function drawPetal(x,y,z,s,ang,tilt,depth,alpha=1){
+ const q=proj(rot({x,y,z})); const sc=q.k*s*Math.min(W,H)*.035;
+ // petal is a softly pointed ellipse, oriented in screen space
+ const rx=sc*1.05, ry=sc*.62;
+ const light=.78 + .22*(1-Math.min(1,Math.abs(depth)/4));
+ ctx.save();ctx.translate(q.x,q.y);ctx.rotate(ang);
+ const g=ctx.createRadialGradient(-rx*.25,-ry*.3,0,0,0,Math.max(rx,ry));
+ g.addColorStop(0,`rgba(255,255,255,${alpha})`);
+ g.addColorStop(.62,`rgba(238,250,255,${alpha*.98})`);
+ g.addColorStop(1,`rgba(185,224,239,${alpha*.9})`);
+ ctx.fillStyle=g;ctx.beginPath();
+ ctx.moveTo(-rx*.9,0);
+ ctx.bezierCurveTo(-rx*.45,-ry,rx*.62,-ry*1.05,rx,0);
+ ctx.bezierCurveTo(rx*.58,ry*1.05,-rx*.48,ry,-rx*.9,0);
+ ctx.fill();
+ ctx.strokeStyle=`rgba(255,255,255,${alpha*.28})`;ctx.lineWidth=Math.max(.5,sc*.025);ctx.stroke();
+ ctx.restore();
+}
+function drawFlower(f,t){
+ const bob=Math.sin(t*.0012+f.phase)*.035;
+ const base={x:f.x,y:f.y+bob,z:f.z};
+ const rp=rot(base); const q=proj(base);
+ const s=f.s*(.98+.04*Math.sin(t*.001+f.phase));
+ // stem from lower center toward flower; curved segments
+ let prev={x:f.x*.78,y:-2.45,z:f.z*.75};
+ for(let j=1;j<=10;j++){
+   const u=j/10;
+   const px=prev.x+(f.x-prev.x)*u + Math.sin(u*4+f.phase)*.10*(1-u);
+   const py=prev.y+(f.y-prev.y)*u;
+   const pz=prev.z+(f.z-prev.z)*u;
+   const a=proj(rot({x:px,y:py,z:pz}));
+   const b=proj(rot({x:prev.x+(f.x-prev.x)*(u-.1),y:prev.y+(f.y-prev.y)*(u-.1),z:prev.z+(f.z-prev.z)*(u-.1)}));
+   ctx.strokeStyle=`rgba(92,165,113,${.25+.5*u})`;ctx.lineWidth=Math.max(1,a.k*1.6);
+   ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(a.x,a.y);ctx.stroke();
+ }
+ // leaves
+ for(let l=0;l<2;l++){
+   const u=.35+l*.25, lx=f.x*.75+Math.sin(f.phase+l*2)*.25, ly=-2.45+(f.y+2.45)*u, lz=f.z*.72;
+   const lp=proj(rot({x:lx, y:ly, z:lz}));
+   ctx.save();ctx.translate(lp.x,lp.y);ctx.rotate((f.phase+l)*.8);
+   const rr=Math.min(W,H)*.03*lp.k;
+   const gr=ctx.createLinearGradient(-rr,0,rr,0);gr.addColorStop(0,'rgba(45,105,70,.35)');gr.addColorStop(1,'rgba(112,191,128,.65)');
+   ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(0,0,rr,rr*.34,0,0,TAU);ctx.fill();ctx.restore();
+ }
+ // petals, individually projected => real depth changes
+ for(let i=0;i<5;i++){
+   const a=f.rot+i*TAU/5;
+   const px=f.x+Math.cos(a)*.34*s, py=f.y+Math.sin(a)*.28*s, pz=f.z+Math.sin(a)*.34*s;
+   const rp2=rot({x:px,y:py,z:pz});
+   drawPetal(px,py,pz,s*.72,a+.25*Math.sin(f.tilt),f.tilt,rp2.z,.96);
+ }
+ // center
+ const cc=proj(rot(base)); const rr=Math.min(W,H)*.011*s*cc.k;
+ const grad=ctx.createRadialGradient(cc.x-rr*.3,cc.y-rr*.3,0,cc.x,cc.y,rr);
+ grad.addColorStop(0,'#fff9c9');grad.addColorStop(.45,'#e9f2c2');grad.addColorStop(1,'#a7c487');
+ ctx.fillStyle=grad;ctx.beginPath();ctx.arc(cc.x,cc.y,rr,0,TAU);ctx.fill();
+ for(let i=0;i<8;i++){const a=i*TAU/8;ctx.strokeStyle='rgba(255,250,190,.75)';ctx.lineWidth=Math.max(.5,rr*.12);ctx.beginPath();ctx.moveTo(cc.x,cc.y);ctx.lineTo(cc.x+Math.cos(a)*rr*1.9,cc.y+Math.sin(a)*rr*1.9);ctx.stroke()}
+ return rp.z;
+}
+function frame(t){
+ ctx.setTransform(DPR,0,0,DPR,0,0);
+ ctx.fillStyle='#050812';ctx.fillRect(0,0,W,H);
+ const bg=ctx.createRadialGradient(W*.5,H*.48,0,W*.5,H*.48,Math.max(W,H)*.7);
+ bg.addColorStop(0,'rgba(18,43,55,.45)');bg.addColorStop(1,'rgba(2,6,14,0)');
+ ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+ // distant stars
+ for(const s of stars){const a=.18+.22*Math.sin(t*.001+s.p);ctx.fillStyle=`rgba(190,235,255,${a})`;ctx.beginPath();ctx.arc(W*(.5+s.x*.5),H*(.5+s.y*.5),s.s,0,TAU);ctx.fill()}
+ if(!drag) yaw += .00065 + vel; vel*=.94;
+ // ion particles
+ for(const p of particles){
+   const a=p.a+t*.00018*p.sp; const rr=p.r+.18*Math.sin(t*.001+p.phase);
+   const x=Math.cos(a)*rr, z=Math.sin(a)*rr*.72, y=p.y+.22*Math.sin(t*.0012+p.phase);
+   const q=proj(rot({x,y,z}));
+   const tw=.35+.65*(.5+.5*Math.sin(t*.003+p.phase));
+   ctx.fillStyle=`rgba(135,220,255,${.12+.45*tw})`;ctx.beginPath();ctx.arc(q.x,q.y,p.size*q.k,0,TAU);ctx.fill();
+ }
+ // flowers sorted back-to-front
+ const sorted=flowers.map(f=>({f,z:rot(f).z})).sort((a,b)=>a.z-b.z);
+ for(const o of sorted) drawFlower(o.f,t);
+ // ion ring
+ const center=proj(rot({x:0,y:.9,z:0})), rx=Math.min(W,H)*.29, ry=rx*.28;
+ ctx.save();ctx.translate(center.x,center.y);ctx.rotate(-.08);
+ ctx.strokeStyle='rgba(100,220,255,.22)';ctx.lineWidth=1;ctx.shadowBlur=14;ctx.shadowColor='rgba(80,220,255,.7)';
+ ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,TAU);ctx.stroke();ctx.restore();
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body></html>

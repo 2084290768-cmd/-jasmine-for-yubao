@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>11 Jasmine Particle Bouquet</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+(() => {
+"use strict";
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d",{alpha:false});
+let W=innerWidth,H=innerHeight,D=1;
+function resize(){
+  W=innerWidth;H=innerHeight;D=Math.min(2,devicePixelRatio||1);
+  canvas.width=Math.floor(W*D);canvas.height=Math.floor(H*D);
+  canvas.style.width=W+"px";canvas.style.height=H+"px";
+  ctx.setTransform(D,0,0,D,0,0);
+}
+addEventListener("resize",resize);resize();
+
+const TAU=Math.PI*2;
+const rand=(a=1)=>Math.random()*a;
+const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v)};
+
+const code=[
+"import numpy as np",
+"from particle_sim import JasmineField",
+"",
+"FPS = 60",
+"DURATION = 5.0",
+"PARTICLES = 4200",
+"DENSITY = 0.16",
+"AIR_RESISTANCE = 0.982",
+"",
+"class JasmineBouquet:",
+"    def __init__(self):",
+"        self.flow = 0.018",
+"        self.rotation = 0.0",
+"        self.phase = 0.0",
+"",
+"    def update(self, dt):",
+"        self.phase += dt",
+"        self.rotation += dt * 0.24",
+"        self.advect_sparse_particles(dt)",
+"        self.reseed_fading_edges()",
+"",
+"def petal_field(center, layer, theta):",
+"    radius = 0.14 * layer",
+"    curl = np.sin(theta * 5.0) * 0.018",
+"    return radius + curl",
+"",
+"field = JasmineBouquet()",
+"while running:",
+"    field.update(1 / FPS)",
+"    render_wireframe()",
+"    render_particle_flower()",
+"    present_frame()",
+"",
+"# sparse volume",
+"# non-solid structure",
+"# slow rotation / soft drift"
+];
+
+function makeFlower(cx,cy,cz,scale,seed){
+  const pts=[];
+  // 6-petal jasmine/rose-like layered flower:
+  // every petal is a curved 3D ribbon of separated particles.
+  for(let layer=0;layer<4;layer++){
+    const petals=5+(layer%2);
+    const radius=(0.055+layer*0.035)*scale;
+    for(let p=0;p<petals;p++){
+      const base=TAU*p/petals+(layer%2)*0.18+seed*.37;
+      const count=18-layer*2;
+      for(let k=0;k<count;k++){
+        const u=k/(count-1);
+        const rr=radius*(0.22+0.95*Math.sin(Math.PI*u));
+        const a=base+(u-.5)*1.05;
+        const curl=Math.sin(u*Math.PI)*0.045*scale;
+        pts.push({
+          x:cx+Math.cos(a)*(rr+curl)*scale*.95,
+          y:cy+Math.sin(a)*(rr+curl)*scale*.72 + (u-.5)*.012,
+          z:cz+Math.cos((u-.5)*Math.PI)*.055*scale + gauss()*.008,
+          size:.65+rand(1.15),
+          a:.40+rand(.42),
+          phase:rand(TAU)
+        });
+      }
+    }
+  }
+  // center
+  for(let i=0;i<42;i++){
+    const a=rand(TAU),r=Math.sqrt(rand())*.045*scale;
+    pts.push({
+      x:cx+Math.cos(a)*r,
+      y:cy+Math.sin(a)*r*.75,
+      z:cz+gauss()*.028,
+      size:.65+rand(1.25),a:.45+rand(.35),phase:rand(TAU)
+    });
+  }
+  return pts;
+}
+
+// Deliberately strong bouquet silhouette: 11 flowers in overlapping rows.
+const centers=[
+  [-.18,-.20,.00],[-.04,-.24,.05],[.10,-.20,-.02],
+  [-.29,-.08,-.03],[-.13,-.08,.10],[.03,-.07,.00],[.18,-.07,.06],
+  [-.24,.08,.02],[-.07,.09,-.04],[.10,.10,.04],
+  [-.05,.25,.00]
+];
+
+let flowerParticles=[];
+centers.forEach((c,i)=>{
+  const s=.92+(i%3)*.045;
+  flowerParticles.push(...makeFlower(c[0],c[1],c[2],s,i));
+});
+
+// Sparse halo/escape particles, but attached to bouquet zones.
+const dust=[];
+for(let i=0;i<720;i++){
+  const c=centers[(Math.random()*centers.length)|0];
+  const a=rand(TAU),r=.13+Math.pow(rand(),.65)*.32;
+  dust.push({
+    x:c[0]+Math.cos(a)*r,
+    y:c[1]+Math.sin(a)*r*.72,
+    z:c[2]+gauss()*.13,
+    vx:gauss()*.006,vy:gauss()*.004,vz:gauss()*.004,
+    size:.35+rand(1.05),a:.08+rand(.26),phase:rand(TAU)
+  });
+}
+
+function project(x,y,z,rot){
+  // bouquet-centered 3D rotation
+  const ca=Math.cos(rot),sa=Math.sin(rot);
+  const X=x*ca-z*sa;
+  const Z=x*sa+z*ca;
+  const perspective=1/(1.42-Z*.48);
+  const S=Math.min(W,H)*1.02;
+  return {
+    x:W*.72+X*S*perspective,
+    y:H*.51-y*S*perspective,
+    z:Z,
+    s:perspective
+  };
+}
+
+function line(a,b,alpha){
+  ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+  ctx.strokeStyle="rgba(240,244,248,"+alpha+")";
+  ctx.lineWidth=.55;ctx.stroke();
+}
+
+function wireframe(rot){
+  // clean scientific transparent cube surrounding bouquet
+  const verts=[];
+  for(let x of [-.48,.48])for(let y of [-.48,.48])for(let z of [-.34,.34])
+    verts.push(project(x,y,z,rot));
+  const id=(x,y,z)=>x*4+y*2+z;
+  [[0,1],[0,2],[0,4],[1,3],[1,5],[2,3],[2,6],[3,7],
+   [4,5],[4,6],[5,7],[6,7]].forEach(e=>line(verts[e[0]],verts[e[1]],.12));
+  // central observation planes
+  [-.16,0,.16].forEach(z=>{
+    const a=project(-.48,-.48,z,rot),b=project(.48,-.48,z,rot);
+    const c=project(.48,.48,z,rot),d=project(-.48,.48,z,rot);
+    line(a,b,.035);line(b,c,.035);line(c,d,.035);line(d,a,.035);
+  });
+}
+
+function drawCode(t){
+  const width=W*.47;
+  ctx.fillStyle="rgba(0,0,0,.78)";
+  ctx.fillRect(0,0,width,H);
+
+  const fs=Math.max(9,Math.min(13,W/105));
+  const lh=fs*1.65;
+  const x=18;
+  const scroll=(t*lh*3.5)%(code.length*lh);
+
+  ctx.font=fs+"px ui-monospace,SFMono-Regular,Menlo,monospace";
+  for(let rep=-1;rep<2;rep++){
+    code.forEach((txt,i)=>{
+      const y=45+i*lh-scroll+rep*code.length*lh;
+      if(y<20||y>H-25)return;
+      ctx.fillStyle="rgba(180,188,198,.27)";
+      ctx.fillText(String(i+1).padStart(2,"0"),x,y);
+      let col="rgba(225,230,235,.55)";
+      if(txt.startsWith("#"))col="rgba(155,185,170,.36)";
+      else if(/def |class |while |import |from /.test(txt))col="rgba(220,215,245,.66)";
+      else if(/self\.|return |np\./.test(txt))col="rgba(205,225,245,.58)";
+      ctx.fillStyle=col;
+      ctx.fillText(txt,x+34,y);
+    });
+  }
+  ctx.font="10px ui-monospace,monospace";
+  ctx.fillStyle="rgba(240,245,248,.34)";
+  ctx.fillText("● RUNNING   jasmine_particle_sim.py",18,H-18);
+}
+
+function render(t){
+  ctx.fillStyle="#000";
+  ctx.fillRect(0,0,W,H);
+
+  // very subtle glow only behind the bouquet
+  const glow=ctx.createRadialGradient(W*.73,H*.51,0,W*.73,H*.51,Math.min(W,H)*.48);
+  glow.addColorStop(0,"rgba(255,242,249,.055)");
+  glow.addColorStop(.45,"rgba(235,240,248,.015)");
+  glow.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
+
+  drawCode(t);
+
+  // exactly 5-second loop
+  const phase=(t%5)/5;
+  const rot=phase*TAU*.085;
+  wireframe(rot);
+
+  const renderList=[];
+  for(const p of flowerParticles){
+    const x=p.x+Math.sin(t*1.8+p.phase)*.0028;
+    const y=p.y+Math.cos(t*1.35+p.phase)*.0022;
+    const z=p.z+Math.sin(t*1.1+p.phase)*.0025;
+    const q=project(x,y,z,rot);
+    renderList.push({q,p,alpha:p.a*(.82+.18*Math.sin(t*1.7+p.phase))});
+  }
+
+  for(const p of dust){
+    const x=p.x+p.vx*t+Math.sin(t+p.phase)*.006;
+    const y=p.y+p.vy*t+Math.cos(t*.8+p.phase)*.005;
+    const z=p.z+p.vz*t;
+    const q=project(x,y,z,rot);
+    renderList.push({q,p,alpha:p.a*(.72+.28*Math.sin(t*1.2+p.phase))});
+  }
+
+  renderList.sort((a,b)=>a.q.z-b.q.z);
+
+  // Particle glow layer
+  for(const o of renderList){
+    const r=Math.max(.45,o.p.size*o.q.s*.72);
+    ctx.beginPath();ctx.arc(o.q.x,o.q.y,r,0,TAU);
+    ctx.fillStyle="rgba(248,240,246,"+Math.max(.025,o.alpha)+")";
+    ctx.fill();
+  }
+
+  // A few delicate outward trails make the bouquet feel unfinished.
+  for(let i=0;i<70;i++){
+    const p=dust[i*10%dust.length];
+    const q=project(p.x,p.y,p.z,rot);
+    const q2=project(p.x*1.045,p.y*1.045,p.z,rot);
+    line(q,q2,.025);
+  }
+
+  requestAnimationFrame(()=>render((performance.now()/1000)%5));
+}
+render(0);
+})();
+</script>
+</body>
+</html>

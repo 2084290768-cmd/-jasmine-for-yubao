@@ -299,7 +299,7 @@ const txIB=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,txIB);gl.buff
 const txTex=gl.createTexture(),aniso=gl.getExtension('EXT_texture_filter_anisotropic');
 function drawText(){
   const c=document.createElement('canvas');c.width=4096;c.height=256;
-  const x=c.getContext('2d'),msg='For yubao. Parting with jasmine, may we never part.';
+  const x=c.getContext('2d'),msg='For yubao. Bring you jasmine, may we never part.';
   const fam='Jost,"Avenir Next",Futura,"Century Gothic","Helvetica Neue",Arial,sans-serif',sp=.14;  // sp：字距（单位 em）
   let px=100;x.font='500 '+px+'px '+fam;
   const w0=[...msg].map(ch=>x.measureText(ch).width),tot=w0.reduce((p,q)=>p+q,0)+px*sp*(msg.length-1);
